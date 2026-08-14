@@ -1,12 +1,25 @@
 import { Platform } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as BackgroundFetch from "expo-background-fetch";
 import * as Notifications from "expo-notifications";
 import * as TaskManager from "expo-task-manager";
 
+import * as api from "../api";
+import { updateWidgets } from "../widget/updateWidgets";
 import { fetchOpenMeteo, parseWeather } from "./api";
+import { ALERT_LEAD_MINUTES, BG_TASK, DEFAULT_SETTINGS } from "./constants";
+import { applyQuietHours } from "./quietHours";
 import { scoreLabel } from "./score";
-import { ALERT_LEAD_MINUTES, BG_TASK, STORAGE_KEYS } from "./constants";
+
+// The background task / any caller without a live SettingsContext reads settings
+// straight from the API (falling back to defaults if the server is unreachable)
+// since it runs outside React.
+async function loadSettings() {
+  try {
+    return { ...DEFAULT_SETTINGS, ...(await api.fetchSettings()) };
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
 
 const isNative = Platform.OS !== "web";
 
@@ -24,18 +37,24 @@ const ID_RAIN    = "dry-clothes-rain-alert";
 const ID_SUNSET  = "dry-clothes-sunset-alert";
 const ID_MORNING = "dry-clothes-morning-brief";
 
-export async function scheduleSmartRainAlert(rainEtaIso, city, rainChance) {
+export async function scheduleSmartRainAlert(rainEtaIso, city, rainChance, leadMinutes = ALERT_LEAD_MINUTES, settings = null) {
   if (!isNative) return null;
 
   await Notifications.cancelScheduledNotificationAsync(ID_RAIN).catch(() => {});
   if (!rainEtaIso) return null;
 
   const rainTime  = new Date(rainEtaIso).getTime();
-  const alertTime = new Date(rainTime - ALERT_LEAD_MINUTES * 60 * 1000);
+  let alertTime   = new Date(rainTime - leadMinutes * 60 * 1000);
+  alertTime       = applyQuietHours(alertTime, settings ?? await loadSettings());
 
   if (alertTime.getTime() <= Date.now()) {
-    // Only fire once per rain event — avoid spamming on every app open
-    const lastEta = await AsyncStorage.getItem(STORAGE_KEYS.lastRainNotifEta);
+    // Only fire once per rain event — avoid spamming on every app open. If the
+    // server can't be reached we let the notification through: a duplicate alert
+    // beats a missed one for this app.
+    let lastEta = null;
+    try {
+      ({ lastRainNotifEta: lastEta } = await api.fetchAlerts());
+    } catch {}
     if (lastEta === rainEtaIso) return "immediate";
 
     await Notifications.scheduleNotificationAsync({
@@ -49,14 +68,14 @@ export async function scheduleSmartRainAlert(rainEtaIso, city, rainChance) {
       },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.IMMEDIATE, channelId: "rain-alerts" },
     });
-    await AsyncStorage.setItem(STORAGE_KEYS.lastRainNotifEta, rainEtaIso);
+    await api.patchAlerts({ lastRainNotifEta: rainEtaIso }).catch(() => {});
     return "immediate";
   }
 
   await Notifications.scheduleNotificationAsync({
     identifier: ID_RAIN,
     content: {
-      title: "☔ Rain coming in 45 minutes!",
+      title: `☔ Rain coming in ${leadMinutes} minutes!`,
       body:  `${rainChance}% chance. Time to bring clothes inside in ${city}!`,
       sound: true,
       badge: 1,
@@ -65,18 +84,19 @@ export async function scheduleSmartRainAlert(rainEtaIso, city, rainChance) {
     trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: alertTime, channelId: "rain-alerts" },
   });
 
-  await AsyncStorage.setItem(STORAGE_KEYS.lastAlertTime, alertTime.toISOString());
+  await api.patchAlerts({ lastAlertTime: alertTime.toISOString() }).catch(() => {});
   return alertTime;
 }
 
-export async function scheduleSunsetAlert(sunsetIso, city) {
+export async function scheduleSunsetAlert(sunsetIso, city, settings = null) {
   if (!isNative) return;
 
   await Notifications.cancelScheduledNotificationAsync(ID_SUNSET).catch(() => {});
   if (!sunsetIso) return;
 
-  const sunsetTime = new Date(sunsetIso).getTime();
-  if (sunsetTime <= Date.now()) return;
+  let sunsetTime = new Date(sunsetIso);
+  sunsetTime     = applyQuietHours(sunsetTime, settings ?? await loadSettings());
+  if (sunsetTime.getTime() <= Date.now()) return;
 
   await Notifications.scheduleNotificationAsync({
     identifier: ID_SUNSET,
@@ -87,7 +107,7 @@ export async function scheduleSunsetAlert(sunsetIso, city) {
       badge: 1,
       data:  { type: "sunset" },
     },
-    trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(sunsetIso), channelId: "rain-alerts" },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: sunsetTime, channelId: "rain-alerts" },
   });
 }
 
@@ -132,30 +152,46 @@ export async function scheduleMorningBrief(weather, city) {
 if (isNative) {
   TaskManager.defineTask(BG_TASK, async () => {
     try {
-      const alertEnabled = await AsyncStorage.getItem(STORAGE_KEYS.alertEnabled);
-      if (alertEnabled !== "true") return BackgroundFetch.BackgroundFetchResult.NoData;
+      // One request gets the toggle, the armed location, its last coords and the
+      // settings — this task runs on a short OS-granted wake-up, so round trips
+      // are the thing worth saving.
+      const snapshot = await api.fetchSnapshot();
 
-      const coordsStr = await AsyncStorage.getItem(STORAGE_KEYS.cachedCoords);
-      if (!coordsStr) return BackgroundFetch.BackgroundFetchResult.NoData;
+      if (!snapshot.alertEnabled) return BackgroundFetch.BackgroundFetchResult.NoData;
 
-      const { lat, lon, city } = JSON.parse(coordsStr);
-      const weather = parseWeather(await fetchOpenMeteo(lat, lon));
+      const notifyId = snapshot.notifyLocationId;
+      const loc      = snapshot.notifyLocation;
+      if (!notifyId || !loc) return BackgroundFetch.BackgroundFetchResult.NoData;
 
-      await AsyncStorage.setItem(STORAGE_KEYS.cachedWeather, JSON.stringify({
-        score:      weather.score,
-        rainChance: weather.rainChance,
-        condition:  weather.condition,
-        temp:       weather.temp,
-        city,
-        updatedAt:  new Date().toISOString(),
-      }));
+      let lat, lon, city;
+      if (loc.isCurrentGPS) {
+        // No GPS fix from a background task — reuse the last known position.
+        const cached = snapshot.notifyCache?.coords;
+        if (cached?.lat == null || cached?.lon == null) return BackgroundFetch.BackgroundFetchResult.NoData;
+        lat  = cached.lat;
+        lon  = cached.lon;
+        city = cached.city ?? loc.name;
+      } else {
+        lat = loc.lat; lon = loc.lon; city = loc.name;
+      }
+
+      const weather  = parseWeather(await fetchOpenMeteo(lat, lon));
+      const settings = { ...DEFAULT_SETTINGS, ...snapshot.settings };
+      const now      = new Date().toISOString();
+      const full     = { ...weather, updatedAt: now };
+
+      await api.putWeatherCache(notifyId, { coords: { lat, lon, city }, weatherFull: full, updatedAt: now });
+
+      // Widgets render the active location, so only redraw when that is the one
+      // we just refreshed.
+      if (snapshot.activeLocationId === notifyId) await updateWidgets();
 
       if (weather.rainEtaIso) {
-        await scheduleSmartRainAlert(weather.rainEtaIso, city, weather.rainChance);
+        await scheduleSmartRainAlert(weather.rainEtaIso, city, weather.rainChance, settings.alertLeadMinutes, settings);
       } else {
         await Notifications.cancelScheduledNotificationAsync(ID_RAIN).catch(() => {});
       }
-      await scheduleSunsetAlert(weather.sunsetIso, city);
+      await scheduleSunsetAlert(weather.sunsetIso, city, settings);
       await scheduleMorningBrief(weather, city);
 
       return BackgroundFetch.BackgroundFetchResult.NewData;

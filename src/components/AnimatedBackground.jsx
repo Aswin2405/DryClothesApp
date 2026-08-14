@@ -1,12 +1,12 @@
 import { useEffect, useRef } from "react";
 import { Animated, Easing, StyleSheet, View } from "react-native";
 
-const BG   = "#07422A";
-const BLOB = "#155a36";
+import { useTheme } from "../theme/theme";
 
 export function AnimatedBackground() {
   const pulse = useRef(new Animated.Value(1)).current;
   const float = useRef(new Animated.Value(0)).current;
+  const t = useTheme();
 
   useEffect(() => {
     Animated.loop(Animated.sequence([
@@ -19,8 +19,8 @@ export function AnimatedBackground() {
     ])).start();
   }, []);
 
-  const bg   = BG;
-  const blob = BLOB;
+  const bg   = t.bg;
+  const blob = t.blob;
 
   return (
     <View style={[StyleSheet.absoluteFill, { backgroundColor: bg }]}>

@@ -23,6 +23,31 @@ export function calcDryingScore({ rainChance, uvi, wind, humidity }) {
   return Math.round(Math.max(0, Math.min(100, score)));
 }
 
+// Estimated clock time by which laundry hung out now would be dry.
+// Reference point: ~4h at 20°C / 50% humidity / 10km/h wind.
+export function estimateDryByTime({ humidity, wind, temp, rainChance, rainEtaIso, now = new Date() }) {
+  const rainSoon = rainEtaIso && new Date(rainEtaIso).getTime() - now.getTime() < 4 * 60 * 60 * 1000;
+  if (rainChance >= 60 || rainSoon) {
+    return {
+      blocked: true,
+      isoTime: null,
+      hoursNeeded: null,
+      reason: rainEtaIso
+        ? "Rain expected before clothes would dry — bring them in."
+        : "High rain chance today — not a good drying window.",
+    };
+  }
+
+  const humidityFactor = 0.6 + ((humidity ?? 60) / 100) * 0.9;
+  const windFactor      = wind <= 20 ? 1 - (wind / 20) * 0.35 : 0.65;
+  const tempFactor       = temp >= 20 ? Math.max(0.55, 1 - (temp - 20) * 0.02) : 1 + (20 - temp) * 0.03;
+
+  const hoursNeeded = Math.max(1, Math.min(12, 4 * humidityFactor * windFactor * tempFactor));
+  const isoTime = new Date(now.getTime() + hoursNeeded * 60 * 60 * 1000).toISOString();
+
+  return { blocked: false, isoTime, hoursNeeded: Math.round(hoursNeeded * 10) / 10, reason: null };
+}
+
 export function scoreLabel(score) {
   if (score >= 75) return { text: "Excellent",  color: "#44dd88", emoji: "✅" };
   if (score >= 55) return { text: "Good",       color: "#88cc44", emoji: "👍" };

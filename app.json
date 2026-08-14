@@ -83,7 +83,42 @@
         }
       ],
       "expo-background-fetch",
-      "expo-task-manager"
+      "expo-task-manager",
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "DryingScoreSmall",
+              "label": "Drying Score",
+              "description": "Today's drying score and rain chance at a glance.",
+              "minWidth": "110dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "maxResizeWidth": "250dp",
+              "maxResizeHeight": "250dp",
+              "resizeMode": "horizontal|vertical",
+              "previewImage": "./assets/images/widget-preview-small.png",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "DryingScoreMedium",
+              "label": "Drying Score — Details",
+              "description": "Drying score with temperature, rain chance and dry-by time.",
+              "minWidth": "250dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "maxResizeWidth": "400dp",
+              "maxResizeHeight": "250dp",
+              "resizeMode": "horizontal|vertical",
+              "previewImage": "./assets/images/widget-preview-medium.png",
+              "updatePeriodMillis": 1800000
+            }
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

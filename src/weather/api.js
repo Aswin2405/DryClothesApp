@@ -1,5 +1,5 @@
 import { RAIN_THRESHOLD } from "./constants";
-import { calcDryingScore, decodeWMO, formatDay, formatHour } from "./score";
+import { calcDryingScore, decodeWMO, estimateDryByTime, formatDay, formatHour } from "./score";
 
 export async function fetchOpenMeteo(lat, lon) {
   const url =
@@ -26,6 +26,23 @@ export async function reverseGeocode(lat, lon) {
     return a.city || a.town || a.village || a.county || a.state_district || a.state || "Your Location";
   } catch {
     return "Your Location";
+  }
+}
+
+export async function geocodeSearch(query) {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`,
+      { headers: { "User-Agent": "DryClothesToday/1.0" } }
+    );
+    const json = await res.json();
+    return json.map(r => ({
+      lat: parseFloat(r.lat),
+      lon: parseFloat(r.lon),
+      displayName: r.display_name,
+    }));
+  } catch {
+    return [];
   }
 }
 
@@ -63,9 +80,11 @@ export function parseWeather(json) {
   }));
 
   const score = calcDryingScore({ rainChance, uvi, wind, humidity });
+  const temp  = Math.round(cur.temperature_2m);
+  const dryBy = estimateDryByTime({ humidity, wind, temp, rainChance, rainEtaIso });
 
   return {
-    temp:           Math.round(cur.temperature_2m),
+    temp,
     rainChance,
     wind,
     uvi,
@@ -79,5 +98,6 @@ export function parseWeather(json) {
     hourly,
     daily,
     score,
+    dryBy,
   };
 }

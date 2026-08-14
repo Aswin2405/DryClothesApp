@@ -1,11 +1,14 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Animated, Easing, StyleSheet, Text, View } from "react-native";
 
+import { useTheme } from "../theme/theme";
 import { scoreLabel } from "../weather/score";
 
 export function ScoreRing({ score }) {
   const anim = useRef(new Animated.Value(0)).current;
   const sl   = scoreLabel(score);
+  const t    = useTheme();
+  const S    = useMemo(() => makeStyles(t), [t]);
 
   useEffect(() => {
     Animated.timing(anim, {
@@ -33,14 +36,16 @@ export function ScoreRing({ score }) {
   );
 }
 
-const S = StyleSheet.create({
-  container:  { alignItems: "center" },
-  ringOuter:  { width: 100, height: 100, borderRadius: 50,  borderWidth: 6,   alignItems: "center", justifyContent: "center" },
-  ringInner:  { width: 82,  height: 82,  borderRadius: 41,  borderWidth: 3,   alignItems: "center", justifyContent: "center" },
-  number:     { fontSize: 28, fontWeight: "900", lineHeight: 30 },
-  of:         { fontSize: 10, color: "rgba(255,255,255,0.4)", marginTop: -2 },
-  labelRow:   { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6 },
-  labelEmoji: { fontSize: 13 },
-  labelText:  { fontSize: 12, fontWeight: "700" },
-  caption:    { fontSize: 10, color: "rgba(255,255,255,0.35)", marginTop: 2 },
-});
+function makeStyles(t) {
+  return StyleSheet.create({
+    container:  { alignItems: "center" },
+    ringOuter:  { width: 100, height: 100, borderRadius: 50,  borderWidth: 6,   alignItems: "center", justifyContent: "center" },
+    ringInner:  { width: 82,  height: 82,  borderRadius: 41,  borderWidth: 3,   alignItems: "center", justifyContent: "center" },
+    number:     { fontSize: 28, fontWeight: "900", lineHeight: 30 },
+    of:         { fontSize: 10, color: t.textMuted, marginTop: -2 },
+    labelRow:   { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6 },
+    labelEmoji: { fontSize: 13 },
+    labelText:  { fontSize: 12, fontWeight: "700" },
+    caption:    { fontSize: 10, color: t.textFaint, marginTop: 2 },
+  });
+}

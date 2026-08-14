@@ -2,6 +2,13 @@
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
+## Backend required
+
+This app stores nothing on the device. Settings, saved locations, the alert toggle
+and every cached forecast live in the MongoDB-backed API in [`../backend`](../backend)
+— start that first, and point `EXPO_PUBLIC_API_URL` in `.env` at it (copy
+`.env.example`). See the [root README](../README.md) for the per-platform URLs.
+
 ## Get started
 
 1. Install dependencies

@@ -1,10 +1,12 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { ActivityIndicator, Animated, StyleSheet, Switch, Text, View } from "react-native";
 
-import { ALERT_LEAD_MINUTES } from "../weather/constants";
+import { useTheme } from "../theme/theme";
 
-export function AlertCard({ alertEnabled, onToggle, nextAlert, loading }) {
+export function AlertCard({ alertEnabled, onToggle, nextAlert, loading, leadMinutes }) {
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const t = useTheme();
+  const S = useMemo(() => makeStyles(t), [t]);
 
   useEffect(() => {
     if (!alertEnabled) return;
@@ -32,21 +34,21 @@ export function AlertCard({ alertEnabled, onToggle, nextAlert, loading }) {
       <View style={S.header}>
         <View style={{ flex: 1 }}>
           <Text style={S.title}>🔔 Smart Rain Alert</Text>
-          <Text style={S.sub}>Fires {ALERT_LEAD_MINUTES} min before rain</Text>
+          <Text style={S.sub}>Fires {leadMinutes} min before rain</Text>
         </View>
         <Switch
           value={alertEnabled}
           onValueChange={onToggle}
-          trackColor={{ false: "rgba(255,255,255,0.15)", true: "#44dd88" }}
+          trackColor={{ false: t.track, true: t.accentGreen }}
           thumbColor="#fff"
-          ios_backgroundColor="rgba(255,255,255,0.15)"
+          ios_backgroundColor={t.track}
         />
       </View>
 
       {alertEnabled && (
         <Animated.View style={[S.statusBox, { transform: [{ scale: pulseAnim }] }]}>
           {loading
-            ? <ActivityIndicator color="#44dd88" size="small" />
+            ? <ActivityIndicator color={t.accentGreen} size="small" />
             : <Text style={S.statusText}>{timeText}</Text>
           }
         </Animated.View>
@@ -61,12 +63,14 @@ export function AlertCard({ alertEnabled, onToggle, nextAlert, loading }) {
   );
 }
 
-const S = StyleSheet.create({
-  card:       { backgroundColor: "rgba(255,255,255,0.07)", borderRadius: 20, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: "rgba(68,221,136,0.25)" },
-  header:     { flexDirection: "row", alignItems: "center" },
-  title:      { fontSize: 15, fontWeight: "800", color: "#fff" },
-  sub:        { fontSize: 11, color: "rgba(255,255,255,0.45)", marginTop: 2 },
-  statusBox:  { marginTop: 10, backgroundColor: "rgba(68,221,136,0.12)", borderRadius: 10, padding: 10, borderWidth: 1, borderColor: "rgba(68,221,136,0.25)" },
-  statusText: { color: "#44dd88", fontSize: 13, fontWeight: "600", textAlign: "center" },
-  note:       { fontSize: 10, color: "rgba(255,255,255,0.3)", textAlign: "center", marginTop: 8 },
-});
+function makeStyles(t) {
+  return StyleSheet.create({
+    card:       { backgroundColor: t.card, borderRadius: 20, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: t.accentGreen + "40" },
+    header:     { flexDirection: "row", alignItems: "center" },
+    title:      { fontSize: 15, fontWeight: "800", color: t.textPrimary },
+    sub:        { fontSize: 11, color: t.textMuted, marginTop: 2 },
+    statusBox:  { marginTop: 10, backgroundColor: t.accentGreen + "1f", borderRadius: 10, padding: 10, borderWidth: 1, borderColor: t.accentGreen + "40" },
+    statusText: { color: t.accentGreen, fontSize: 13, fontWeight: "600", textAlign: "center" },
+    note:       { fontSize: 10, color: t.textFaint, textAlign: "center", marginTop: 8 },
+  });
+}

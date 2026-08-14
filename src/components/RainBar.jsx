@@ -1,8 +1,11 @@
 import { useEffect, useRef } from "react";
 import { Animated, Easing, View } from "react-native";
 
+import { useTheme } from "../theme/theme";
+
 export function RainBar({ pop, height = 5, style }) {
   const anim = useRef(new Animated.Value(0)).current;
+  const t = useTheme();
 
   useEffect(() => {
     Animated.timing(anim, {
@@ -13,10 +16,10 @@ export function RainBar({ pop, height = 5, style }) {
     }).start();
   }, [pop]);
 
-  const color = pop >= 60 ? "#ff4455" : pop >= 30 ? "#ffaa00" : "#44dd88";
+  const color = pop >= 60 ? t.accentRed : pop >= 30 ? t.accentOrange : t.accentGreen;
 
   return (
-    <View style={[{ width: "100%", height, backgroundColor: "rgba(255,255,255,0.12)", borderRadius: height / 2, overflow: "hidden", marginTop: 6 }, style]}>
+    <View style={[{ width: "100%", height, backgroundColor: t.track, borderRadius: height / 2, overflow: "hidden", marginTop: 6 }, style]}>
       <Animated.View style={{
         height,
         borderRadius: height / 2,
