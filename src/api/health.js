@@ -1,6 +1,6 @@
 // Liveness probing, kept separate from ./client because /api/health is the one
-// route that needs no device id — it can run before expo-application has
-// resolved anything.
+// route that needs no token — it answers before anyone has signed in, which is
+// exactly when the wake-up gate needs it.
 //
 // Free-tier hosts idle their containers out, so the first request after a quiet
 // spell is also the request that wakes them: it can hang for the better part of

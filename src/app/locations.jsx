@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
-import { Alert, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useRouter } from "expo-router";
 
 import { AddLocationModal } from "../components/AddLocationModal";
 import { useLocationsContext } from "../context/LocationsContext";
+import { notify } from "../lib/dialog";
 import { useTheme } from "../theme/theme";
 
 export default function LocationsScreen() {
@@ -26,7 +27,7 @@ export default function LocationsScreen() {
       await addLocation(entry);
       setModalVisible(false);
     } catch (err) {
-      Alert.alert("Couldn't add location", err.message || "Please try again.");
+      notify("Couldn't add location", err.message || "Please try again.");
     }
     setSaving(false);
   }
@@ -35,7 +36,7 @@ export default function LocationsScreen() {
     try {
       await removeLocation(id);
     } catch (err) {
-      Alert.alert("Couldn't remove location", err.message || "Please try again.");
+      notify("Couldn't remove location", err.message || "Please try again.");
     }
   }
 

@@ -1,10 +1,43 @@
 // One named call per backend route. Import as `import * as api from "../api"`.
 import { request } from "./client";
+import { clearToken, setToken } from "./session";
 
-export { API_BASE_URL, ApiError, getDeviceId } from "./client";
+export { API_BASE_URL, ApiError, setUnauthorizedHandler } from "./client";
+export { getToken } from "./session";
 export { pingBackend, waitForBackend } from "./health";
 
 const enc = encodeURIComponent;
+
+// --- auth -------------------------------------------------------------------
+// register/login are the only unauthenticated calls; both store the token they
+// get back, so every later request is signed in automatically.
+
+async function startSession(payload) {
+  await setToken(payload.token);
+  return payload.user;
+}
+
+export const register = ({ email, password, name }) =>
+  request("/auth/register", { method: "POST", auth: false, body: { email, password, name } }).then(startSession);
+
+export const login = ({ email, password }) =>
+  request("/auth/login", { method: "POST", auth: false, body: { email, password } }).then(startSession);
+
+export const fetchMe = () => request("/auth/me").then(r => r.user);
+
+// Best-effort server call, then drop the token locally no matter what — being
+// unable to reach the server must not trap someone in a session.
+export async function logout() {
+  try {
+    await request("/auth/logout", { method: "POST" });
+  } catch {}
+  await clearToken();
+}
+
+export const deleteAccount = async () => {
+  await request("/auth/me", { method: "DELETE" });
+  await clearToken();
+};
 
 // --- settings ---------------------------------------------------------------
 
@@ -36,6 +69,6 @@ export const putWeatherCache = (locationId, { coords, weatherFull, updatedAt }) 
 
 // --- snapshot ---------------------------------------------------------------
 // Settings + locations + state + the active/notify caches in one round trip, for
-// the background task and the widget task where request count actually matters.
+// the background task and the widget where request count actually matters.
 
 export const fetchSnapshot = () => request("/snapshot");

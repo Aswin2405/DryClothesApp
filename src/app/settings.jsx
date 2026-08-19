@@ -3,6 +3,8 @@ import { ScrollView, StatusBar, StyleSheet, Switch, Text, TouchableOpacity, View
 import { useRouter } from "expo-router";
 
 import { AlertCard } from "../components/AlertCard";
+import { useAuthContext } from "../context/AuthContext";
+import { confirm, notify } from "../lib/dialog";
 import { useSettingsContext } from "../context/SettingsContext";
 import { useWeatherContext } from "../context/WeatherContext";
 import { useTheme } from "../theme/theme";
@@ -46,6 +48,33 @@ export default function SettingsScreen() {
   const S = useMemo(() => makeStyles(t), [t]);
   const { settings, updateSettings } = useSettingsContext();
   const { alertEnabled, nextAlert, alertLoading, toggleAlert } = useWeatherContext();
+  const { user, signOut, deleteAccount } = useAuthContext();
+
+  async function confirmSignOut() {
+    const yes = await confirm({
+      title: "Sign out?",
+      message: "Your settings and locations stay on your account — sign back in any time to pick them up.",
+      confirmLabel: "Sign out",
+      destructive: true,
+    });
+    if (yes) await signOut();
+  }
+
+  async function confirmDelete() {
+    const yes = await confirm({
+      title: "Delete account?",
+      message: "This permanently removes your account and every saved location, setting and forecast. It cannot be undone.",
+      confirmLabel: "Delete forever",
+      destructive: true,
+    });
+    if (!yes) return;
+
+    try {
+      await deleteAccount();
+    } catch (err) {
+      notify("Couldn't delete account", err.message || "Please try again.");
+    }
+  }
 
   return (
     <View style={S.container}>
@@ -139,6 +168,28 @@ export default function SettingsScreen() {
         <TouchableOpacity style={S.linkBtn} onPress={() => router.push("/locations")}>
           <Text style={S.linkBtnTxt}>📍 Manage Locations</Text>
         </TouchableOpacity>
+
+        <Text style={S.sectionTitle}>Account</Text>
+        <View style={S.card}>
+          <View style={S.row}>
+            <Text style={S.rowLabel}>Signed in as</Text>
+            <Text style={S.accountValue} numberOfLines={1}>{user?.email ?? "…"}</Text>
+          </View>
+          {!!user?.name && (
+            <View style={S.row}>
+              <Text style={S.rowLabel}>Name</Text>
+              <Text style={S.accountValue} numberOfLines={1}>{user.name}</Text>
+            </View>
+          )}
+        </View>
+
+        <TouchableOpacity style={S.signOutBtn} onPress={confirmSignOut} activeOpacity={0.8}>
+          <Text style={S.signOutTxt}>Sign Out</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={S.dangerBtn} onPress={confirmDelete} activeOpacity={0.75} hitSlop={6}>
+          <Text style={S.dangerTxt}>Delete account</Text>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -174,5 +225,13 @@ function makeStyles(t) {
 
     linkBtn:    { backgroundColor: t.track, borderRadius: 16, paddingVertical: 14, alignItems: "center", marginTop: 20 },
     linkBtnTxt: { color: t.textPrimary, fontWeight: "800", fontSize: 14 },
+
+    accountValue: { color: t.textSecondary, fontSize: 13, fontWeight: "600", flexShrink: 1, marginLeft: 16, textAlign: "right" },
+
+    signOutBtn: { backgroundColor: t.track, borderRadius: 16, paddingVertical: 14, alignItems: "center", marginTop: 12 },
+    signOutTxt: { color: t.textPrimary, fontWeight: "800", fontSize: 14 },
+
+    dangerBtn: { alignItems: "center", paddingVertical: 14, marginTop: 4 },
+    dangerTxt: { color: t.accentRed, fontWeight: "700", fontSize: 13 },
   });
 }

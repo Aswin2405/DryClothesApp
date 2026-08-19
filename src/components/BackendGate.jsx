@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
-import { Alert } from "react-native";
 import * as SplashScreen from "expo-splash-screen";
 
 import { useBackendContext } from "../context/BackendContext";
+import { confirm } from "../lib/dialog";
 import { BackendUnreachableScreen, WakingScreen } from "./BackendScreens";
 
 // After this long the wait stops being reassuring and starts being a trap, so
@@ -28,15 +28,20 @@ export function BackendGate({ children }) {
   useEffect(() => {
     if (status !== "unreachable" || alerted.current) return;
     alerted.current = true;
-    Alert.alert(
-      "Server not responding",
-      "Your saved settings and locations couldn't be loaded. You can keep using the app — the forecast still works — but nothing will be saved.",
-      [
-        { text: "Try again", onPress: () => { alerted.current = false; retry(); } },
-        { text: "Continue anyway", style: "cancel", onPress: skip },
-      ],
-      { cancelable: false }
-    );
+
+    confirm({
+      title: "Server not responding",
+      message: "Your saved settings and locations couldn't be loaded. You can keep using the app — the forecast still works — but nothing will be saved.",
+      confirmLabel: "Try again",
+      cancelLabel: "Continue anyway",
+    }).then(tryAgain => {
+      if (tryAgain) {
+        alerted.current = false;
+        retry();
+      } else {
+        skip();
+      }
+    });
   }, [status, retry, skip]);
 
   if (status === "checking") return null; // native splash is still covering this

@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import * as api from "../api";
 import { DEFAULT_SETTINGS } from "../weather/constants";
 import { updateWidgets } from "../widget/updateWidgets";
+import { useAuthContext } from "./AuthContext";
 import { useBackendContext } from "./BackendContext";
 
 const SettingsContext = createContext(null);
@@ -11,24 +12,35 @@ export function SettingsProvider({ children }) {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [fetched, setFetched]   = useState(false);
   const { status } = useBackendContext();
+  const { status: authStatus } = useAuthContext();
 
-  // This provider sits above BackendGate (the gate's screens are themed), so it
-  // has to do its own waiting: fetching during a cold start would just time out
-  // and leave the session stuck on defaults.
+  // This provider sits above both gates (their screens are themed), so it has to
+  // do its own waiting on two things: a server that is actually up, and an
+  // account to load settings for.
   useEffect(() => {
-    if (status !== "ready") return;
+    if (status !== "ready" || authStatus !== "authed") return;
 
+    let alive = true;
     api.fetchSettings()
-      .then(saved => setSettings({ ...DEFAULT_SETTINGS, ...saved }))
+      .then(saved => { if (alive) setSettings({ ...DEFAULT_SETTINGS, ...saved }); })
       // Defaults still render a fully usable screen, and the next launch
       // (or the next write) picks the real values back up.
       .catch(() => {})
-      .finally(() => setFetched(true));
-  }, [status]);
+      .finally(() => { if (alive) setFetched(true); });
 
-  // Settled once the settings have loaded, or once we know there is no server
-  // to load them from and defaults are the final answer.
-  const ready = fetched || status === "unreachable" || status === "skipped";
+    return () => {
+      alive = false;
+      // Leaving the signed-in state drops this account's values, so the login
+      // screen and whoever signs in next never see them — not even for the one
+      // request it takes to load theirs.
+      setSettings(DEFAULT_SETTINGS);
+      setFetched(false);
+    };
+  }, [status, authStatus]);
+
+  // Settled once the settings have loaded, or once we know they never will be —
+  // no server to ask, or nobody signed in to ask about.
+  const ready = fetched || authStatus === "anon" || status === "unreachable" || status === "skipped";
 
   async function updateSettings(patch) {
     const previous = settings;

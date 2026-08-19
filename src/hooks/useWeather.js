@@ -2,9 +2,10 @@ import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
 import * as Speech from "expo-speech";
 import { useEffect, useRef, useState } from "react";
-import { Alert, AppState, Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 
 import * as api from "../api";
+import { notify } from "../lib/dialog";
 import { fetchOpenMeteo, parseWeather, reverseGeocode } from "../weather/api";
 import { buildTamilMessage } from "../weather/score";
 import {
@@ -131,7 +132,7 @@ export function useWeather(settings, location) {
       if (spinner && Platform.OS !== "web") {
         const { status: notifStatus } = await Notifications.requestPermissionsAsync();
         if (notifStatus !== "granted") {
-          Alert.alert("Notifications off", "Enable notifications in Settings to get rain alerts.");
+          notify("Notifications off", "Enable notifications in Settings to get rain alerts.");
         }
         await registerBackgroundTask();
       }
@@ -215,7 +216,7 @@ export function useWeather(settings, location) {
       // The background task reads this flag from the server, so a UI-only toggle
       // would be a lie — put the switch back and say so.
       setAlertEnabled(previous);
-      Alert.alert("Couldn't save", "Alerts could not be updated. Check your connection and try again.");
+      notify("Couldn't save", "Alerts could not be updated. Check your connection and try again.");
       return;
     }
 
@@ -237,7 +238,7 @@ export function useWeather(settings, location) {
       await api.patchAlerts({ alertEnabled: false }).catch(() => {});
       setAlertEnabled(false);
       setAlertLoading(false);
-      Alert.alert("Couldn't save", "The alert location could not be saved. Check your connection and try again.");
+      notify("Couldn't save", "The alert location could not be saved. Check your connection and try again.");
       return;
     }
 

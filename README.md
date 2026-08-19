@@ -2,12 +2,14 @@
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
-## Backend required
+## Backend
 
 This app stores nothing on the device. Settings, saved locations, the alert toggle
-and every cached forecast live in the MongoDB-backed API in [`../backend`](../backend)
-— start that first, and point `EXPO_PUBLIC_API_URL` in `.env` at it (copy
-`.env.example`). See the [root README](../README.md) for the per-platform URLs.
+and every cached forecast live in the MongoDB-backed API in [`../backend`](../backend),
+deployed at **https://dryclothesapp-backend.onrender.com** — which `.env` already
+points at, so `npx expo start` just works.
+
+To run the API locally instead, see the [root README](../README.md).
 
 ## Get started
 

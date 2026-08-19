@@ -1,15 +1,18 @@
 // Transport for the DryClothes backend.
 //
-// All app state that used to live in AsyncStorage — settings, saved locations,
-// the alert toggle and every weather cache — is owned by the server now. This
-// module is the only place that knows the base URL, the device identity and the
-// wire format; everything else imports the named calls from ./index.
-import * as Application from "expo-application";
-import { Platform } from "react-native";
+// Everything the app used to keep in AsyncStorage — settings, saved locations,
+// the alert toggle and every weather cache — is owned by the server and scoped to
+// the signed-in account. This module is the only place that knows the base URL,
+// how a request is authenticated, and the wire format; everything else imports
+// the named calls from ./index.
+import { getToken } from "./session";
 
 // EXPO_PUBLIC_ vars are inlined by Metro at bundle time, so this also works in
 // the headless widget/background contexts where there is no app config loaded.
-const DEFAULT_BASE_URL = "http://localhost:4000";
+// The deployed API is the fallback rather than localhost: a build that somehow
+// misses the env var should still reach a real server instead of dialling a port
+// on the phone itself.
+const DEFAULT_BASE_URL = "https://dryclothesapp-backend.onrender.com";
 
 export const API_BASE_URL = String(process.env.EXPO_PUBLIC_API_URL || DEFAULT_BASE_URL).replace(/\/+$/, "");
 
@@ -25,44 +28,23 @@ export class ApiError extends Error {
   }
 }
 
-// The web build has no install-scoped hardware id, and with AsyncStorage gone
-// there is nowhere to persist a generated one — so web gets a per-session
-// identity and starts fresh on reload. Native is the supported target.
-const WEB_SESSION_ID = `web_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
+// AuthContext registers here so a rejected token drops the session everywhere at
+// once, rather than each screen discovering it separately. Headless callers never
+// register one, so they just see the error.
+let onUnauthorized = null;
 
-let deviceIdPromise = null;
-
-async function resolveDeviceId() {
-  if (Platform.OS === "android") {
-    const id = Application.getAndroidId();
-    if (!id) throw new ApiError("Could not read the Android device id");
-    return id;
-  }
-  if (Platform.OS === "ios") {
-    // Returns null if the device has been rebooted but not yet unlocked. That is
-    // transient, so fail here rather than inventing an id that would strand the
-    // user's data under a second device record.
-    const id = await Application.getIosIdForVendorAsync();
-    if (!id) throw new ApiError("Device identifier not available yet");
-    return id;
-  }
-  return WEB_SESSION_ID;
+export function setUnauthorizedHandler(fn) {
+  onUnauthorized = fn;
 }
 
-// Cached because the native call is cheap but not free, and every request needs
-// it. A failure clears the cache so the next request retries.
-export function getDeviceId() {
-  if (!deviceIdPromise) {
-    deviceIdPromise = resolveDeviceId().catch(err => {
-      deviceIdPromise = null;
-      throw err;
-    });
-  }
-  return deviceIdPromise;
-}
+/**
+ * `auth: false` sends no token and suppresses the global sign-out — used by
+ * login and register, where a 401 means "wrong password", not "session expired".
+ */
+export async function request(path, { method = "GET", body, timeoutMs = REQUEST_TIMEOUT_MS, auth = true } = {}) {
+  const token = auth ? await getToken() : null;
+  if (auth && !token) throw new ApiError("Not signed in", 401);
 
-export async function request(path, { method = "GET", body, timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
-  const deviceId = await getDeviceId();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -71,7 +53,7 @@ export async function request(path, { method = "GET", body, timeoutMs = REQUEST_
     res = await fetch(`${API_BASE_URL}/api${path}`, {
       method,
       headers: {
-        "x-device-id": deviceId,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -84,6 +66,7 @@ export async function request(path, { method = "GET", body, timeoutMs = REQUEST_
     clearTimeout(timer);
   }
 
+  if (res.status === 401 && auth) onUnauthorized?.();
   if (res.status === 204) return null;
 
   const text = await res.text();

@@ -9,13 +9,23 @@ export async function widgetTaskHandler({ widgetInfo, widgetAction, clickAction,
   const draw = (data, settings) => renderWidget(renderWidgetTree(widgetInfo.widgetName, data, settings));
 
   switch (widgetAction) {
+    // WIDGET_ADDED has nothing on screen yet, so it draws whatever it gets —
+    // including the empty state.
+    case "WIDGET_ADDED": {
+      const { data, settings } = await getWidgetSnapshot({ refresh: "stale" });
+      draw(data, settings);
+      break;
+    }
+
     // WIDGET_UPDATE also fires on the plugin's updatePeriodMillis (30 min) and
     // after a reboot, which is what keeps the widget current on its own.
-    case "WIDGET_ADDED":
     case "WIDGET_UPDATE":
     case "WIDGET_RESIZED": {
       const { data, settings } = await getWidgetSnapshot({ refresh: "stale" });
-      draw(data, settings);
+      // A sleeping free-tier server answers nothing, and blanking a widget that
+      // was showing a good reading is worse than letting it go stale. Redraw only
+      // when there is something to redraw with.
+      if (data || widgetAction === "WIDGET_RESIZED") draw(data, settings);
       break;
     }
 
@@ -28,7 +38,7 @@ export async function widgetTaskHandler({ widgetInfo, widgetAction, clickAction,
       draw(cached.data, cached.settings); // keep the current reading on screen while fetching
 
       const fresh = await getWidgetSnapshot({ refresh: "force" });
-      draw(fresh.data, fresh.settings);
+      if (fresh.data) draw(fresh.data, fresh.settings);
       break;
     }
 
