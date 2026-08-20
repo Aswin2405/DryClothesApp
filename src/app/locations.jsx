@@ -4,7 +4,7 @@ import { useRouter } from "expo-router";
 
 import { AddLocationModal } from "../components/AddLocationModal";
 import { useLocationsContext } from "../context/LocationsContext";
-import { notify } from "../lib/dialog";
+import { notifyError } from "../lib/dialog";
 import { useTheme } from "../theme/theme";
 
 export default function LocationsScreen() {
@@ -27,7 +27,7 @@ export default function LocationsScreen() {
       await addLocation(entry);
       setModalVisible(false);
     } catch (err) {
-      notify("Couldn't add location", err.message || "Please try again.");
+      notifyError("Couldn't add location", err);
     }
     setSaving(false);
   }
@@ -36,7 +36,7 @@ export default function LocationsScreen() {
     try {
       await removeLocation(id);
     } catch (err) {
-      notify("Couldn't remove location", err.message || "Please try again.");
+      notifyError("Couldn't remove location", err);
     }
   }
 

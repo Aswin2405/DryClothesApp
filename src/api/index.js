@@ -3,7 +3,9 @@ import { request } from "./client";
 import { clearToken, setToken } from "./session";
 
 export { API_BASE_URL, ApiError, setUnauthorizedHandler } from "./client";
-export { getToken } from "./session";
+// clearToken is the token-only half of logout(), for when the session is already
+// dead and POSTing /auth/logout with it would just 401 again.
+export { clearToken, getToken, getTokenExpiry } from "./session";
 export { pingBackend, waitForBackend } from "./health";
 
 const enc = encodeURIComponent;

@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -12,6 +11,7 @@ import {
 } from "react-native";
 
 import { useAuthContext } from "../context/AuthContext";
+import { useKeyboardAwareScroll } from "../hooks/useKeyboardAwareScroll";
 import { useTheme } from "../theme/theme";
 
 const MIN_PASSWORD_LENGTH = 8; // mirrors MIN_PASSWORD_LENGTH in the backend's User model
@@ -20,6 +20,7 @@ export function AuthScreen() {
   const t = useTheme();
   const S = useMemo(() => makeStyles(t), [t]);
   const { signIn, signUp } = useAuthContext();
+  const { scrollRef, scrollProps, field } = useKeyboardAwareScroll();
 
   const [mode, setMode]         = useState("login"); // "login" | "signup"
   const [email, setEmail]       = useState("");
@@ -52,9 +53,11 @@ export function AuthScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={S.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    // "padding" on Android too: edge-to-edge is mandatory there now, so the window
+    // never resizes for the keyboard and behavior={undefined} would do nothing.
+    <KeyboardAvoidingView style={S.flex} behavior="padding">
       <StatusBar barStyle={t.statusBarStyle === "light" ? "light-content" : "dark-content"} />
-      <ScrollView contentContainerStyle={S.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scrollRef} contentContainerStyle={S.scroll} {...scrollProps}>
 
         <Text style={S.logo}>👕</Text>
         <Text style={S.title}>Dry Clothes Today</Text>
@@ -68,6 +71,7 @@ export function AuthScreen() {
           <>
             <Text style={S.label}>Name (optional)</Text>
             <TextInput
+              {...field("name")}
               style={S.input}
               value={name}
               onChangeText={setName}
@@ -82,6 +86,7 @@ export function AuthScreen() {
 
         <Text style={S.label}>Email</Text>
         <TextInput
+          {...field("email")}
           style={S.input}
           value={email}
           onChangeText={v => { setEmail(v); setError(""); }}
@@ -96,6 +101,7 @@ export function AuthScreen() {
 
         <Text style={S.label}>Password</Text>
         <TextInput
+          {...field("password")}
           style={S.input}
           value={password}
           onChangeText={v => { setPassword(v); setError(""); }}

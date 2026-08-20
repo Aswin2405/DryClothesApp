@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { AppState, Platform } from "react-native";
 
 import * as api from "../api";
-import { notify } from "../lib/dialog";
+import { notify, notifyError } from "../lib/dialog";
 import { fetchOpenMeteo, parseWeather, reverseGeocode } from "../weather/api";
 import { buildTamilMessage } from "../weather/score";
 import {
@@ -212,11 +212,11 @@ export function useWeather(settings, location) {
 
     try {
       await api.patchAlerts({ alertEnabled: value });
-    } catch {
+    } catch (err) {
       // The background task reads this flag from the server, so a UI-only toggle
       // would be a lie — put the switch back and say so.
       setAlertEnabled(previous);
-      notify("Couldn't save", "Alerts could not be updated. Check your connection and try again.");
+      notifyError("Couldn't save", err, "Alerts could not be updated. Check your connection and try again.");
       return;
     }
 
@@ -234,11 +234,11 @@ export function useWeather(settings, location) {
     // switch on with nothing behind it.
     try {
       await location.setNotifyLocation(activeLocationRef.current.id);
-    } catch {
+    } catch (err) {
       await api.patchAlerts({ alertEnabled: false }).catch(() => {});
       setAlertEnabled(false);
       setAlertLoading(false);
-      notify("Couldn't save", "The alert location could not be saved. Check your connection and try again.");
+      notifyError("Couldn't save", err, "The alert location could not be saved. Check your connection and try again.");
       return;
     }
 

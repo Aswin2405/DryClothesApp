@@ -45,3 +45,15 @@ export function notify(title, message) {
   }
   Alert.alert(title, message);
 }
+
+/**
+ * Reports a failed action, except when it failed because the session ended:
+ * AuthContext already puts up its own "Session expired" alert and is taking the
+ * screen away, so a second dialog stacked on top of it only adds noise.
+ *
+ * Pass `message` to override the error's own text.
+ */
+export function notifyError(title, err, message) {
+  if (err?.status === 401) return;
+  notify(title, message || err?.message || "Please try again.");
+}

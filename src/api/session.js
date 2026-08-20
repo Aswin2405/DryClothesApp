@@ -55,3 +55,46 @@ export async function clearToken() {
     else globalThis.localStorage?.removeItem(WEB_KEY);
   } catch {}
 }
+
+const B64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+// JWT payloads are unpadded base64url, which atob() does not accept as-is — and
+// atob() itself is engine-dependent. Ten lines here avoids both problems. The
+// payload is ASCII JSON, so no UTF-8 decoding is needed.
+function decodeBase64Url(input) {
+  const chars = input.replace(/-/g, "+").replace(/_/g, "/");
+  let acc = 0;
+  let bits = 0;
+  let out = "";
+
+  for (const ch of chars) {
+    const value = B64_ALPHABET.indexOf(ch);
+    if (value < 0) continue; // padding or stray characters
+    acc = (acc << 6) | value;
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      out += String.fromCharCode((acc >> bits) & 0xff);
+    }
+  }
+  return out;
+}
+
+/**
+ * When the token stops being accepted, in ms since the epoch — or null if that
+ * can't be read off it.
+ *
+ * The server is still the authority (it verifies the signature; this does not),
+ * but knowing the deadline locally lets the app end the session on time instead
+ * of leaving someone in a UI that will 401 on its next request.
+ */
+export function getTokenExpiry(token) {
+  try {
+    const payload = String(token ?? "").split(".")[1];
+    if (!payload) return null;
+    const { exp } = JSON.parse(decodeBase64Url(payload));
+    return typeof exp === "number" ? exp * 1000 : null; // JWT exp is in seconds
+  } catch {
+    return null; // not a JWT we can read — the next 401 will catch it instead
+  }
+}

@@ -4,7 +4,7 @@ import { useRouter } from "expo-router";
 
 import { AlertCard } from "../components/AlertCard";
 import { useAuthContext } from "../context/AuthContext";
-import { confirm, notify } from "../lib/dialog";
+import { confirm, notifyError } from "../lib/dialog";
 import { useSettingsContext } from "../context/SettingsContext";
 import { useWeatherContext } from "../context/WeatherContext";
 import { useTheme } from "../theme/theme";
@@ -72,7 +72,7 @@ export default function SettingsScreen() {
     try {
       await deleteAccount();
     } catch (err) {
-      notify("Couldn't delete account", err.message || "Please try again.");
+      notifyError("Couldn't delete account", err);
     }
   }
 

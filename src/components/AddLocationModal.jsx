@@ -2,6 +2,7 @@ import * as Location from "expo-location";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Modal,
   ScrollView,
   StyleSheet,
@@ -11,6 +12,7 @@ import {
   View,
 } from "react-native";
 
+import { useKeyboardAwareScroll } from "../hooks/useKeyboardAwareScroll";
 import { useTheme } from "../theme/theme";
 import { geocodeSearch, reverseGeocode } from "../weather/api";
 
@@ -19,6 +21,7 @@ const DEBOUNCE_MS = 600;
 export function AddLocationModal({ visible, onClose, onSave, saving = false }) {
   const t = useTheme();
   const S = useMemo(() => makeStyles(t), [t]);
+  const { scrollRef, scrollProps, field } = useKeyboardAwareScroll();
 
   const [query, setQuery]       = useState("");
   const [results, setResults]   = useState([]);
@@ -49,6 +52,8 @@ export function AddLocationModal({ visible, onClose, onSave, saving = false }) {
   function pickResult(r) {
     setPicked({ lat: r.lat, lon: r.lon });
     setName(r.displayName.split(",")[0]);
+    // The name field and Save button only appear now — bring them into view.
+    requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
   }
 
   async function useCurrentGps() {
@@ -72,57 +77,66 @@ export function AddLocationModal({ visible, onClose, onSave, saving = false }) {
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={S.backdrop}>
+      {/* A Modal gets no keyboard handling of its own on either platform, so the
+          sheet has to lift itself — otherwise the keyboard sits right on top of
+          the fields being typed into. */}
+      <KeyboardAvoidingView style={S.backdrop} behavior="padding">
         <View style={S.sheet}>
           <View style={S.headerRow}>
             <Text style={S.title}>Add Location</Text>
             <TouchableOpacity onPress={onClose} hitSlop={10}><Text style={S.closeTxt}>✕</Text></TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={S.gpsBtn} onPress={useCurrentGps} disabled={locating}>
-            {locating
-              ? <ActivityIndicator color={t.accentGreenText} size="small" />
-              : <Text style={S.gpsBtnTxt}>📍 Use current GPS position</Text>}
-          </TouchableOpacity>
+          {/* One scroll surface for the whole body: whatever space the keyboard
+              leaves, every field stays reachable inside it. */}
+          <ScrollView ref={scrollRef} contentContainerStyle={S.body} bounces={false} {...scrollProps}>
+            <TouchableOpacity style={S.gpsBtn} onPress={useCurrentGps} disabled={locating}>
+              {locating
+                ? <ActivityIndicator color={t.accentGreenText} size="small" />
+                : <Text style={S.gpsBtnTxt}>📍 Use current GPS position</Text>}
+            </TouchableOpacity>
 
-          <TextInput
-            style={S.input}
-            placeholder="Search for a city…"
-            placeholderTextColor={t.textFaint}
-            value={query}
-            onChangeText={setQuery}
-          />
+            <TextInput
+              {...field("query")}
+              style={S.input}
+              placeholder="Search for a city…"
+              placeholderTextColor={t.textFaint}
+              value={query}
+              onChangeText={setQuery}
+            />
 
-          {searching && <ActivityIndicator style={{ marginTop: 10 }} color={t.textSecondary} size="small" />}
+            {searching && <ActivityIndicator style={{ marginTop: 10 }} color={t.textSecondary} size="small" />}
 
-          <ScrollView style={{ maxHeight: 160, marginTop: 6 }}>
             {results.map((r, i) => (
               <TouchableOpacity key={i} style={S.resultRow} onPress={() => pickResult(r)}>
                 <Text style={S.resultTxt} numberOfLines={1}>{r.displayName}</Text>
               </TouchableOpacity>
             ))}
-          </ScrollView>
 
-          {picked && (
-            <>
-              <Text style={S.label}>Name this location</Text>
-              <TextInput
-                style={S.input}
-                value={name}
-                onChangeText={setName}
-                placeholder="e.g. Home"
-                placeholderTextColor={t.textFaint}
-              />
-              {/* Saving now round-trips to the server, so the button has to show it */}
-              <TouchableOpacity style={S.saveBtn} onPress={save} disabled={!name.trim() || saving}>
-                {saving
-                  ? <ActivityIndicator color={t.accentGreenText} size="small" />
-                  : <Text style={S.saveBtnTxt}>Save Location</Text>}
-              </TouchableOpacity>
-            </>
-          )}
+            {picked && (
+              <>
+                <Text style={S.label}>Name this location</Text>
+                <TextInput
+                  {...field("name")}
+                  style={S.input}
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="e.g. Home"
+                  placeholderTextColor={t.textFaint}
+                  returnKeyType="done"
+                  onSubmitEditing={save}
+                />
+                {/* Saving now round-trips to the server, so the button has to show it */}
+                <TouchableOpacity style={S.saveBtn} onPress={save} disabled={!name.trim() || saving}>
+                  {saving
+                    ? <ActivityIndicator color={t.accentGreenText} size="small" />
+                    : <Text style={S.saveBtnTxt}>Save Location</Text>}
+                </TouchableOpacity>
+              </>
+            )}
+          </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -130,7 +144,10 @@ export function AddLocationModal({ visible, onClose, onSave, saving = false }) {
 function makeStyles(t) {
   return StyleSheet.create({
     backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
-    sheet:    { backgroundColor: t.bg, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36 },
+    // maxHeight lets the body scroll instead of the sheet growing off-screen
+    // once the keyboard has taken the bottom half.
+    sheet:    { backgroundColor: t.bg, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 20, maxHeight: "92%" },
+    body:     { paddingBottom: 36 },
 
     headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
     title:     { color: t.textPrimary, fontSize: 18, fontWeight: "800" },
